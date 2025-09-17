@@ -102,12 +102,15 @@ map.on('click', (e) => {
   `;
 
   // Peruuta
-  div.querySelector(".cancel").addEventListener("click", () => {
+  div.querySelector(".cancel").addEventListener("click", (ev) => {
+    ev.stopPropagation(); // estää karttaklikkauksen
     map.removeLayer(marker);
   });
 
   // Tallenna
-  div.querySelector(".save").addEventListener("click", () => {
+  div.querySelector(".save").addEventListener("click", (ev) => {
+    ev.stopPropagation(); // estää karttaklikkauksen
+
     const comment = div.querySelector("#comment").value.trim();
 
     // Vaihdetaan popup heti -> palaute käyttäjälle
@@ -121,7 +124,7 @@ map.on('click', (e) => {
       body: JSON.stringify({ lat, lng, comment })
     });
 
-    // Suljetaan popup heti, EI avata uudestaan
+    // Suljetaan popup heti
     marker.closePopup();
     showToast("Tallennettu onnistuneesti!");
   });
