@@ -13,19 +13,44 @@
     .row { display: flex; gap: .5rem; margin-top: .5rem; justify-content: flex-end; }
     button { padding: .4rem .7rem; border: 1px solid #ccc; border-radius: .4rem; background: #f5f5f5; cursor: pointer; }
     button.primary { background: #2e7d32; color: white; border-color: #2e7d32; }
+    /* Toast-ilmoitus */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      padding: .6rem 1rem;
+      border-radius: .5rem;
+      font-size: .95rem;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s ease;
+    }
+    .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
 
 <div id="map"></div>
+<div id="toast" class="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
 <script>
-// 🔗 Google Apps Script WebApp URL
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxmIVh417UOeV8B_Ra46Dpi9OCFoSs45uelkHLnWYYAt2TT92GKNFRG36962gCNIUB1/exec";
 
-// --- AOI-viiva TM35 ---
+// --- Funktio toast-ilmoitukselle ---
+function showToast(msg, ms=2500) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), ms);
+}
+
+// --- AOI-viiva ---
 const AOI_GEOJSON_TM35 = {
   "type":"FeatureCollection",
   "features":[
@@ -97,6 +122,7 @@ map.on('click', (e) => {
         `</div>`
       );
       marker.closePopup();
+      showToast("Tallennettu onnistuneesti!");
     } catch (err) {
       console.error("Tallennusvirhe", err);
       alert("Tallennus epäonnistui: " + err);
