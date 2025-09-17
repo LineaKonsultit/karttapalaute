@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Karttapalaute – Linea </title>
+  <title>Karttapalaute – Leaflet + Google Sheets</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body { height: 100%; margin: 0; }
@@ -43,7 +43,7 @@
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxmIVh417UOeV8B_Ra46Dpi9OCFoSs45uelkHLnWYYAt2TT92GKNFRG36962gCNIUB1/exec";
 
 // --- Toast-ilmoitus ---
-function showToast(msg, ms=2500) {
+function showToast(msg, ms=2000) {
   const el = document.getElementById("toast");
   el.textContent = msg;
   el.classList.add("show");
@@ -110,10 +110,10 @@ map.on('click', (e) => {
   div.querySelector(".save").addEventListener("click", () => {
     const comment = div.querySelector("#comment").value.trim();
 
-    // Vaihdetaan popup-teksti heti
+    // Vaihdetaan popup heti → käyttäjä saa palautteen
     marker.setPopupContent("<div><em>Tallennetaan...</em></div>");
 
-    // Lähetetään data taustalle
+    // Lähetetään data taustalle ilman odotusta
     fetch(WEB_APP_URL, {
       method: "POST",
       mode: "no-cors",
@@ -121,16 +121,14 @@ map.on('click', (e) => {
       body: JSON.stringify({ lat, lng, comment })
     });
 
-    // Päivitetään popup näkyviin "Tallennettu"
-    setTimeout(() => {
-      marker.setPopupContent(
-        `<div><strong>Tallennettu</strong><br/>Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}<br/>` +
-        (comment ? `"${comment.replace(/</g,"&lt;")}"` : "<em>(ei kommenttia)</em>") +
-        `</div>`
-      );
-      marker.closePopup();
-      showToast("Tallennettu onnistuneesti!");
-    }, 800); // n. 0,8 sekunnin viive
+    // Päivitetään heti tallennettu-tilaan ja suljetaan
+    marker.setPopupContent(
+      `<div><strong>Tallennettu</strong><br/>Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}<br/>` +
+      (comment ? `"${comment.replace(/</g,"&lt;")}"` : "<em>(ei kommenttia)</em>") +
+      `</div>`
+    );
+    marker.closePopup();
+    showToast("Tallennettu onnistuneesti!");
   });
 
   marker.bindPopup(div).openPopup();
