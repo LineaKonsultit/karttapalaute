@@ -4,117 +4,31 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Karttapalaute – Leaflet + Google Sheets</title>
-
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100%; }
     .popup-form { min-width: 220px; }
-    .popup-form textarea {
-      width: 100%;
-      min-height: 70px;
-      box-sizing: border-box;
-      resize: vertical;
-      font: inherit;
-    }
+    .popup-form textarea { width: 100%; min-height: 70px; }
     .row { display: flex; gap: .5rem; margin-top: .5rem; justify-content: flex-end; }
     button { padding: .4rem .7rem; border: 1px solid #ccc; border-radius: .4rem; background: #f5f5f5; cursor: pointer; }
     button.primary { background: #2e7d32; color: white; border-color: #2e7d32; }
-    button:disabled { opacity: .6; cursor: not-allowed; }
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 20px;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.85);
-      color: #fff;
-      padding: .6rem .9rem;
-      border-radius: .5rem;
-      font-size: .95rem;
-      z-index: 9999;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity .25s ease;
-    }
-    .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
 
 <div id="map"></div>
-<div id="toast" class="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
-
 <script>
-// 🔗 UUSI GOOGLE APPS SCRIPT -WEBAPP OSOITE
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwBQ-NQSQxGB8mYVI-DWTk49zD1Sys1BcPjfH4FoVw7NycIqooiKhZrdiR8uGqfhEQi/exec";
 
-// AOI-viiva TM35-koordinaateilla
-const AOI_GEOJSON_TM35 = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[448367.549,6716436.53],[448352.43,6716410.2895],[448330.6255,6716372.1105],[448318.202,6716342.102],[448303.316,6716305.636],[448289.79,6716271.4695],[448279.5015,6716250.2885],[448263.097,6716221.362],[448245.6805,6716192.923],[448225.887,6716151.882],[448208.754,6716107.7845],[448187.418,6716056.09],[448170.214,6716024.939],[448160.344,6716005.063],[448151.8525,6715967.7095],[448150.5415,6715922.2755],[448148.014,6715892.133],[448145.051,6715876.27]]},"properties":{}}]};
+// --- Luo kartta ---
+const map = L.map('map').setView([62.0, 25.0], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
 
-proj4.defs("EPSG:3067","+proj=utm +zone=35 +ellps=GRS80 +units=m +no_defs");
-
-function reprojectTM35toWGS84(geojson){
-  function conv([x,y]){ const [lon,lat]=proj4("EPSG:3067","WGS84",[x,y]); return [lon,lat]; }
-  function mapCoords(c){ return (typeof c[0]==='number') ? conv(c) : c.map(mapCoords); }
-  return {type:geojson.type,features:(geojson.features||[]).map(f=>({
-    type:"Feature",properties:f.properties||{},geometry:{type:f.geometry.type,coordinates:mapCoords(f.geometry.coordinates)}
-  }))};
-}
-
-function showToast(msg, ms=2500) {
-  const el=document.getElementById('toast');
-  el.textContent=msg;
-  el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'),ms);
-}
-
-const map = L.map('map');
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-
-const AOI_WGS84 = reprojectTM35toWGS84(AOI_GEOJSON_TM35);
-const lineStyle = { color:'#ff8c00', weight:8, opacity:0.5 };
-const aoiLayer = L.geoJSON(AOI_WGS84, { style: lineStyle }).addTo(map);
-map.fitBounds(aoiLayer.getBounds(), { padding:[20,20] });
-
-// --- GLOBALIT FUNKTIOT ---
-window.removeMarker = function(id) {
-  const m = map._layers[id];
-  if (m) map.removeLayer(m);
-};
-
-window.saveMarker = async function(id, lat, lng) {
-  const m = map._layers[id];
-  if (!m) return;
-  const popupEl = m.getPopup().getElement();
-  const comment = popupEl.querySelector('#comment').value.trim();
-
-  try {
-    const res = await fetch(WEB_APP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat, lng, comment })
-    });
-    const text = await res.text();
-    console.log("Server response:", text);
-    showToast("Tallennettu onnistuneesti!");
-
-    m.setPopupContent(
-      `<div><strong>Tallennettu</strong><br/>Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}<br/>` +
-      (comment ? `“${comment.replace(/</g,'&lt;')}”` : '<em>(ei kommenttia)</em>') +
-      `</div>`
-    );
-    m.closePopup();
-  } catch (err) {
-    console.error("Tallennusvirhe", err);
-    alert("Tallennus epäonnistui: " + err);
-    map.removeLayer(m);
-  }
-};
-
-// --- KARTTAKLIKKAUS ---
+// --- Klikkaus kartalle ---
 map.on('click', (e) => {
   const { lat, lng } = e.latlng;
   const marker = L.marker([lat, lng]).addTo(map);
@@ -124,14 +38,52 @@ map.on('click', (e) => {
       <label><strong>Kuvaile lyhyesti:</strong></label><br/>
       <textarea id="comment"></textarea>
       <div class="row">
-        <button type="button" onclick="removeMarker(${marker._leaflet_id})">Peruuta</button>
-        <button type="button" class="primary" onclick="saveMarker(${marker._leaflet_id}, ${lat}, ${lng})">Tallenna</button>
+        <button type="button" class="cancel">Peruuta</button>
+        <button type="button" class="save primary">Tallenna</button>
       </div>
     </div>
   `;
   marker.bindPopup(formHtml).openPopup();
+
+  marker.on("popupopen", () => {
+    const container = marker.getPopup().getElement();
+    const cancelBtn = container.querySelector(".cancel");
+    const saveBtn = container.querySelector(".save");
+    const textarea = container.querySelector("#comment");
+
+    // Peruuta
+    cancelBtn.addEventListener("click", () => {
+      map.removeLayer(marker);
+    });
+
+    // Tallenna
+    saveBtn.addEventListener("click", async () => {
+      const comment = textarea.value.trim();
+      saveBtn.disabled = true;
+      try {
+        const res = await fetch(WEB_APP_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat, lng, comment })
+        });
+        const text = await res.text();
+        console.log("Server response:", text);
+        marker.setPopupContent(
+          `<div><strong>Tallennettu</strong><br/>Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}<br/>` +
+          (comment ? `"${comment.replace(/</g,"&lt;")}"` : "<em>(ei kommenttia)</em>") +
+          `</div>`
+        );
+        marker.closePopup();
+      } catch (err) {
+        console.error("Tallennusvirhe", err);
+        alert("Tallennus epäonnistui: " + err);
+        map.removeLayer(marker);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  });
 });
 </script>
-
 </body>
 </html>
