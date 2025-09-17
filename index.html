@@ -3,16 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Karttapalaute – Leaflet + Google Sheets + AOI</title>
+  <title>Karttapalaute – Leaflet + Google Sheets</title>
 
-  <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100%; }
@@ -24,19 +17,8 @@
       resize: vertical;
       font: inherit;
     }
-    .row {
-      display: flex;
-      gap: .5rem;
-      margin-top: .5rem;
-      justify-content: flex-end;
-    }
-    button {
-      padding: .4rem .7rem;
-      border: 1px solid #ccc;
-      border-radius: .4rem;
-      background: #f5f5f5;
-      cursor: pointer;
-    }
+    .row { display: flex; gap: .5rem; margin-top: .5rem; justify-content: flex-end; }
+    button { padding: .4rem .7rem; border: 1px solid #ccc; border-radius: .4rem; background: #f5f5f5; cursor: pointer; }
     button.primary { background: #2e7d32; color: white; border-color: #2e7d32; }
     button:disabled { opacity: .6; cursor: not-allowed; }
     .toast {
@@ -59,168 +41,97 @@
 </head>
 <body>
 
-  <div id="map"></div>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="map"></div>
+<div id="toast" class="toast"></div>
 
-  <!-- Leaflet JS -->
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
-  <!-- proj4 koordinaattimuunnoksiin -->
-  <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
 
-  <script>
-    // Google Apps Script -webappisi
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwBQ-NQSQxGB8mYVI-DWTk49zD1Sys1BcPjfH4FoVw7NycIqooiKhZrdiR8uGqfhEQi/exec";
+<script>
+// 🔗 UUSI GOOGLE APPS SCRIPT -WEBAPP OSOITE
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwBQ-NQSQxGB8mYVI-DWTk49zD1Sys1BcPjfH4FoVw7NycIqooiKhZrdiR8uGqfhEQi/exec";
 
-    // AOI-FeatureCollection (TM35 / EPSG:3067 koordinaatein)
-    const AOI_GEOJSON_TM35 = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[448367.54899999965,6716436.529999999],[448352.4304999998,6716410.2895],[448330.6255000001,6716372.1105],[448318.2019999996,6716342.102],[448303.31599999964,6716305.636],[448289.79000000004,6716271.4695],[448279.50150000025,6716250.2885],[448263.09700000007,6716221.362],[448245.6804999998,6716192.923],[448225.8870000001,6716151.881999999],[448208.7539999997,6716107.784499999],[448187.4179999996,6716056.09],[448170.2139999997,6716024.938999999],[448160.3439999996,6716005.062999999],[448151.85250000004,6715967.7095],[448150.5415000003,6715922.2754999995],[448148.01400000043,6715892.132999999],[448145.051,6715876.27]]},"properties":{"Shape_Leng":609.734549818}}]};
+// AOI-viiva TM35-koordinaateilla
+const AOI_GEOJSON_TM35 = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[448367.549,6716436.53],[448352.43,6716410.2895],[448330.6255,6716372.1105],[448318.202,6716342.102],[448303.316,6716305.636],[448289.79,6716271.4695],[448279.5015,6716250.2885],[448263.097,6716221.362],[448245.6805,6716192.923],[448225.887,6716151.882],[448208.754,6716107.7845],[448187.418,6716056.09],[448170.214,6716024.939],[448160.344,6716005.063],[448151.8525,6715967.7095],[448150.5415,6715922.2755],[448148.014,6715892.133],[448145.051,6715876.27]]},"properties":{}}]};
 
-    // EPSG:3067 (ETRS89 / TM35FIN) proj4-määritelmä
-    proj4.defs("EPSG:3067","+proj=utm +zone=35 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs");
+proj4.defs("EPSG:3067","+proj=utm +zone=35 +ellps=GRS80 +units=m +no_defs");
 
-    // Heuristiikka: onko data todennäköisesti TM35?
-    function isLikelyTM35(geojson){
-      let tmCount = 0, total = 0;
-      function scanCoords(coords){
-        if (typeof coords[0] === 'number') {
-          const x = coords[0], y = coords[1];
-          total++;
-          if (x > 100000 && x < 1000000 && y > 6500000 && y < 7800000) tmCount++;
-        } else {
-          coords.forEach(scanCoords);
-        }
-      }
-      (geojson.features || []).forEach(f=>{
-        if (f.geometry) scanCoords(f.geometry.coordinates);
-      });
-      return total > 0 && tmCount/total > 0.8;
-    }
+function reprojectTM35toWGS84(geojson){
+  function conv([x,y]){ const [lon,lat]=proj4("EPSG:3067","WGS84",[x,y]); return [lon,lat]; }
+  function mapCoords(c){ return (typeof c[0]==='number') ? conv(c) : c.map(mapCoords); }
+  return {type:geojson.type,features:(geojson.features||[]).map(f=>({
+    type:"Feature",properties:f.properties||{},geometry:{type:f.geometry.type,coordinates:mapCoords(f.geometry.coordinates)}
+  }))};
+}
 
-    // Reprojektoi: EPSG:3067 -> WGS84 (lon,lat)
-    function reprojectGeoJSON_TM35_to_WGS84(geojson){
-      function convCoord(xy){
-        const [x,y] = xy;
-        const [lon, lat] = proj4("EPSG:3067","WGS84",[x,y]);
-        return [lon, lat];
-      }
-      function mapCoords(coords){
-        if (typeof coords[0] === 'number') return convCoord(coords);
-        return coords.map(mapCoords);
-      }
-      return {
-        type: geojson.type,
-        features: (geojson.features || []).map(f=>({
-          type: "Feature",
-          properties: f.properties || {},
-          geometry: f.geometry ? { type: f.geometry.type, coordinates: mapCoords(f.geometry.coordinates) } : null
-        }))
-      };
-    }
+function showToast(msg, ms=2500) {
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),ms);
+}
 
-    // Toast
-    function toast(msg, ms = 2200) {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.classList.add('show');
-      setTimeout(() => el.classList.remove('show'), ms);
-    }
+const map = L.map('map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-    // Kartta
-    const map = L.map('map');
+const AOI_WGS84 = reprojectTM35toWGS84(AOI_GEOJSON_TM35);
+const lineStyle = { color:'#ff8c00', weight:8, opacity:0.5 };
+const aoiLayer = L.geoJSON(AOI_WGS84, { style: lineStyle }).addTo(map);
+map.fitBounds(aoiLayer.getBounds(), { padding:[20,20] });
 
-    // OSM-laatta
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap tekijät'
-    }).addTo(map);
+// --- GLOBALIT FUNKTIOT ---
+window.removeMarker = function(id) {
+  const m = map._layers[id];
+  if (m) map.removeLayer(m);
+};
 
-    // Reprojektoi AOI tarvittaessa
-    const AOI_WGS84 = isLikelyTM35(AOI_GEOJSON_TM35)
-      ? reprojectGeoJSON_TM35_to_WGS84(AOI_GEOJSON_TM35)
-      : AOI_GEOJSON_TM35;
+window.saveMarker = async function(id, lat, lng) {
+  const m = map._layers[id];
+  if (!m) return;
+  const popupEl = m.getPopup().getElement();
+  const comment = popupEl.querySelector('#comment').value.trim();
 
-    // Tyylit: viivalle paksumpi ja puoliläpinäkyvä, polygoneille 50% täyttö
-    const polygonStyle = { color:'#ff8c00', weight:2, fillColor:'#ff8c00', fillOpacity:0.5 };
-    const lineStyle    = { color:'#ff8c00', weight:15, opacity:0.5 }; // <-- paksumpi & puoliläpinäkyvä
-
-    function styleByGeom(feature){
-      const t = feature.geometry && feature.geometry.type;
-      if (t === 'Polygon' || t === 'MultiPolygon') return polygonStyle;
-      return lineStyle;
-    }
-
-    const aoiLayer = L.geoJSON(AOI_WGS84, { style: styleByGeom }).addTo(map);
-
-    // Zoomaa AOI:hin
-    try {
-      const b = aoiLayer.getBounds();
-      if (b.isValid()) map.fitBounds(b, { padding: [20,20] });
-      else map.setView([60.192059, 24.945831], 6);
-    } catch {
-      map.setView([60.192059, 24.945831], 6);
-    }
-
-    // Klikki → marker + popup-lomake → POST GAS:lle
-    map.on('click', (e) => {
-      const { lat, lng } = e.latlng;
-      const marker = L.marker([lat, lng]).addTo(map);
-
-      const formHtml = `
-        <div class="popup-form">
-          <label for="comment"><strong>Kuvaile lyhyesti:</strong></label><br/>
-          <textarea id="comment" placeholder="Kirjoita kommentti..."></textarea>
-          <div class="row">
-            <button type="button" class="cancel">Peruuta</button>
-            <button type="button" class="save primary">Tallenna</button>
-          </div>
-        </div>
-      `;
-      marker.bindPopup(formHtml).openPopup();
-
-      marker.on('popupopen', () => {
-        const container = marker.getPopup().getElement();
-        const $save = container.querySelector('button.save');
-        const $cancel = container.querySelector('button.cancel');
-        const $textarea = container.querySelector('textarea#comment');
-
-        $cancel.addEventListener('click', () => {
-          map.removeLayer(marker);
-        });
-
-        $save.addEventListener('click', async () => {
-          const comment = ($textarea.value || '').trim();
-          $save.disabled = true;
-
-          try {
-            const res = await fetch(WEB_APP_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lat, lng, comment })
-            });
-
-            if (!res.ok) throw new Error(res.statusText);
-            await res.json().catch(() => ({}));
-
-            toast('Tallennettu onnistuneesti!');
-            marker.setPopupContent(
-              `<div><strong>Tallennettu</strong><br/>Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}<br/>` +
-              (comment ? `“${comment.replace(/</g,'&lt;')}”` : '<em>(ei kommenttia)</em>') +
-              `</div>`
-            );
-            marker.closePopup();
-          } catch (err) {
-            console.error(err);
-            toast('Tallennus epäonnistui! Tarkista WebApp-URL & CORS.');
-            map.removeLayer(marker);
-          } finally {
-            $save.disabled = false;
-          }
-        });
-      });
+  try {
+    const res = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lng, comment })
     });
-  </script>
+    const text = await res.text();
+    console.log("Server response:", text);
+    showToast("Tallennettu onnistuneesti!");
+
+    m.setPopupContent(
+      `<div><strong>Tallennettu</strong><br/>Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}<br/>` +
+      (comment ? `“${comment.replace(/</g,'&lt;')}”` : '<em>(ei kommenttia)</em>') +
+      `</div>`
+    );
+    m.closePopup();
+  } catch (err) {
+    console.error("Tallennusvirhe", err);
+    alert("Tallennus epäonnistui: " + err);
+    map.removeLayer(m);
+  }
+};
+
+// --- KARTTAKLIKKAUS ---
+map.on('click', (e) => {
+  const { lat, lng } = e.latlng;
+  const marker = L.marker([lat, lng]).addTo(map);
+
+  const formHtml = `
+    <div class="popup-form">
+      <label><strong>Kuvaile lyhyesti:</strong></label><br/>
+      <textarea id="comment"></textarea>
+      <div class="row">
+        <button type="button" onclick="removeMarker(${marker._leaflet_id})">Peruuta</button>
+        <button type="button" class="primary" onclick="saveMarker(${marker._leaflet_id}, ${lat}, ${lng})">Tallenna</button>
+      </div>
+    </div>
+  `;
+  marker.bindPopup(formHtml).openPopup();
+});
+</script>
+
 </body>
 </html>
