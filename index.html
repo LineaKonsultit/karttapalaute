@@ -39,8 +39,6 @@
     }
     button.primary { background: #2e7d32; color: white; border-color: #2e7d32; }
     button:disabled { opacity: .6; cursor: not-allowed; }
-
-    /* Toast */
     .toast {
       position: fixed;
       left: 50%;
@@ -77,33 +75,31 @@
     // Google Apps Script -webappisi
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbygYaYJCixAxes9DEYQ0ZB-IMMhV4e6ma4i2940_aaXEPhFh2nKWVWRs5p9FDQQak9G/exec";
 
-    // Antamasi AOI-FeatureCollection (TM35 / EPSG:3067 koordinaatein)
+    // AOI-FeatureCollection (TM35 / EPSG:3067 koordinaatein)
     const AOI_GEOJSON_TM35 = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[[448367.54899999965,6716436.529999999],[448352.4304999998,6716410.2895],[448330.6255000001,6716372.1105],[448318.2019999996,6716342.102],[448303.31599999964,6716305.636],[448289.79000000004,6716271.4695],[448279.50150000025,6716250.2885],[448263.09700000007,6716221.362],[448245.6804999998,6716192.923],[448225.8870000001,6716151.881999999],[448208.7539999997,6716107.784499999],[448187.4179999996,6716056.09],[448170.2139999997,6716024.938999999],[448160.3439999996,6716005.062999999],[448151.85250000004,6715967.7095],[448150.5415000003,6715922.2754999995],[448148.01400000043,6715892.132999999],[448145.051,6715876.27]]},"properties":{"Shape_Leng":609.734549818}}]};
 
-    // Määritellään EPSG:3067 proj4:lle (ETRS89 / TM35FIN)
-    // Lähde: https://epsg.io/3067
+    // EPSG:3067 (ETRS89 / TM35FIN) proj4-määritelmä
     proj4.defs("EPSG:3067","+proj=utm +zone=35 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs");
 
-    // Heuristiikka: onko data todennäköisesti TM35 (metrejä Suomessa)?
+    // Heuristiikka: onko data todennäköisesti TM35?
     function isLikelyTM35(geojson){
-      let found = false, tmCount = 0, total = 0;
+      let tmCount = 0, total = 0;
       function scanCoords(coords){
         if (typeof coords[0] === 'number') {
           const x = coords[0], y = coords[1];
           total++;
-          // TM35 x noin 100k–1 000k, y noin 6 600k–7 800k
           if (x > 100000 && x < 1000000 && y > 6500000 && y < 7800000) tmCount++;
         } else {
           coords.forEach(scanCoords);
         }
       }
       (geojson.features || []).forEach(f=>{
-        if (f.geometry) { scanCoords(f.geometry.coordinates); found = true; }
+        if (f.geometry) scanCoords(f.geometry.coordinates);
       });
-      return found && tmCount/Math.max(total,1) > 0.8;
+      return total > 0 && tmCount/total > 0.8;
     }
 
-    // Muunna GeoJSONin kaikki koordinaatit: EPSG:3067 -> WGS84 (lon,lat)
+    // Reprojektoi: EPSG:3067 -> WGS84 (lon,lat)
     function reprojectGeoJSON_TM35_to_WGS84(geojson){
       function convCoord(xy){
         const [x,y] = xy;
@@ -124,7 +120,7 @@
       };
     }
 
-    // Pieni toast-ilmoitus
+    // Toast
     function toast(msg, ms = 2200) {
       const el = document.getElementById('toast');
       el.textContent = msg;
@@ -132,13 +128,13 @@
       setTimeout(() => el.classList.remove('show'), ms);
     }
 
-    // Luo kartta
+    // Kartta
     const map = L.map('map');
 
     // OSM-laatta
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+      attribution: '&copy; OpenStreetMap tekijät'
     }).addTo(map);
 
     // Reprojektoi AOI tarvittaessa
@@ -146,9 +142,9 @@
       ? reprojectGeoJSON_TM35_to_WGS84(AOI_GEOJSON_TM35)
       : AOI_GEOJSON_TM35;
 
-    // Tyyli: Polygonille oranssi täyttö 50%, viivalle oranssi viiva
+    // Tyylit: viivalle paksumpi ja puoliläpinäkyvä, polygoneille 50% täyttö
     const polygonStyle = { color:'#ff8c00', weight:2, fillColor:'#ff8c00', fillOpacity:0.5 };
-    const lineStyle    = { color:'#ff8c00', weight:4, opacity:1 };
+    const lineStyle    = { color:'#ff8c00', weight:8, opacity:0.5 }; // <-- paksumpi & puoliläpinäkyvä
 
     function styleByGeom(feature){
       const t = feature.geometry && feature.geometry.type;
@@ -158,7 +154,7 @@
 
     const aoiLayer = L.geoJSON(AOI_WGS84, { style: styleByGeom }).addTo(map);
 
-    // Zoomaa AOI:hin tai fallback Helsinkiin
+    // Zoomaa AOI:hin
     try {
       const b = aoiLayer.getBounds();
       if (b.isValid()) map.fitBounds(b, { padding: [20,20] });
@@ -167,7 +163,7 @@
       map.setView([60.192059, 24.945831], 6);
     }
 
-    // Klikki → marker + popup-lomake
+    // Klikki → marker + popup-lomake → POST GAS:lle
     map.on('click', (e) => {
       const { lat, lng } = e.latlng;
       const marker = L.marker([lat, lng]).addTo(map);
