@@ -73,9 +73,13 @@
     button { padding: .4rem .7rem; border: 1px solid #ccc; border-radius: .4rem; background: #f5f5f5; cursor: pointer; }
     button.primary { background: #2e7d32; color: white; border-color: #2e7d32; }
 
-    /* Nostetaan popup ohjeen yläpuolelle */
-    .leaflet-popup {
-      z-index: 2001 !important;
+    /* Nostetaan popupien kaikki osat ohjeen yläpuolelle */
+    .leaflet-popup-pane,
+    .leaflet-popup,
+    .leaflet-popup-content-wrapper,
+    .leaflet-popup-content {
+      z-index: 4000 !important;
+      position: relative;
     }
 
     .toast {
