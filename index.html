@@ -12,39 +12,58 @@
     /* Kelluva ohje */
     .floating {
       position: fixed;
-      top: 12px;
-      left: 12px;
+      top: 10px;
+      left: 10px;
       z-index: 1200;
-      max-width: min(720px, 92vw);
-      background: rgba(255,255,255,0.96);
+      max-width: 620px; /* isolla ruudulla pysyy siistinä */
+      background: rgba(255,255,255,0.97);
       border: 1px solid #e7e7e7;
       border-radius: 12px;
       box-shadow: 0 8px 22px rgba(0,0,0,0.10);
       padding: 12px 14px;
     }
-    .floating h2{
+    .floating h2 {
       margin: 0 0 6px 0;
-      font: 700 16px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      font: 700 clamp(14px, 3.5vw, 16px)/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
     }
-    .floating ol{
+    .floating ol {
       margin: 0 0 10px 20px;
       padding: 0;
-      font: 500 14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      font: 500 clamp(13px, 3.5vw, 15px)/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
     }
-    .floating li + li{ margin-top: 4px; }
-    .floating .hint{
+    .floating li + li { margin-top: 4px; }
+    .floating .hint {
       margin-top: 4px;
-      font: 500 12px/1.25 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      color:#444;
+      font: 500 clamp(11px, 3vw, 13px)/1.25 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color: #444;
     }
-    .actions { display:flex; gap:8px; justify-content:flex-end; }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+    }
     .btn {
-      padding:.48rem .8rem; border:1px solid #c9c9c9; border-radius:9px;
-      background:#f7f7f7; cursor:pointer; font:600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      padding: .6rem 1rem;
+      border: 1px solid #c9c9c9;
+      border-radius: 9px;
+      background: #f7f7f7;
+      cursor: pointer;
+      font: 600 clamp(13px, 3.5vw, 15px)/1 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
     }
-    .btn.primary{ background:#2e7d32; color:#fff; border-color:#2e7d32; }
-    @media (max-width:700px){
-      .floating{ right:12px; left:12px; }
+    .btn.primary {
+      background: #2e7d32;
+      color: #fff;
+      border-color: #2e7d32;
+    }
+
+    /* Pienillä ruuduilla venyy koko leveydelle */
+    @media (max-width: 600px) {
+      .floating {
+        left: 10px;
+        right: 10px;
+        max-width: none;
+      }
+      .actions { justify-content: center; }
+      .btn.primary { flex: 1; text-align: center; }
     }
 
     /* Popup + toast */
@@ -97,13 +116,13 @@
 <script>
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxmIVh417UOeV8B_Ra46Dpi9OCFoSs45uelkHLnWYYAt2TT92GKNFRG36962gCNIUB1/exec";
 
-/* Kiitossivu samassa tiedostossa */
+/* Kiitossivu */
 document.getElementById('finishBtn').addEventListener('click', () => {
   document.open();
   document.write(`<!doctype html><meta charset="utf-8"><title>Kiitos</title>
   <style>
     html,body{height:100%;margin:0;background:#fff}
-    body{display:grid;place-items:center;font:600 28px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111}
+    body{display:grid;place-items:center;font:600 26px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;text-align:center;padding:20px}
   </style>
   <div>Kiitos vastauksista!</div>`);
   document.close();
@@ -117,7 +136,7 @@ function showToast(msg, ms=2000) {
   setTimeout(() => el.classList.remove("show"), ms);
 }
 
-// --- AOI-viiva TM35 (GeometryCollection) ---
+// --- AOI-viiva ---
 const AOI_GEOJSON_TM35 = {
   "type":"GeometryCollection",
   "geometries":[
@@ -136,11 +155,10 @@ const AOI_GEOJSON_TM35 = {
   ]
 };
 
-// --- Kartta ---
 const map = L.map('map');
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-// --- Koordinaattimuunnos TM35 → WGS84 + offset ---
+// --- Muunnos ---
 proj4.defs("EPSG:3067","+proj=utm +zone=35 +ellps=GRS80 +units=m +no_defs");
 const OFFSET_LON = -0.00005;
 const OFFSET_LAT =  0.0000;
@@ -153,7 +171,6 @@ function reprojectTM35toWGS84(geometry){
     return [lon,lat];
   }
   function mapCoords(c){ return (typeof c[0]==='number') ? conv(c) : c.map(mapCoords); }
-
   if (geometry.type === "GeometryCollection") {
     return {
       type:"FeatureCollection",
@@ -163,19 +180,9 @@ function reprojectTM35toWGS84(geometry){
         geometry:{ type:g.type, coordinates: mapCoords(g.coordinates) }
       }))
     };
-  } else {
-    return {
-      type:"FeatureCollection",
-      features:[{
-        type:"Feature",
-        properties:{},
-        geometry:{ type:geometry.type, coordinates: mapCoords(geometry.coordinates) }
-      }]
-    };
   }
 }
 
-// --- Viiva ---
 const AOI_WGS84 = reprojectTM35toWGS84(AOI_GEOJSON_TM35);
 const aoiLayer = L.geoJSON(AOI_WGS84,{ style:{color:'#ff8c00',weight:16,opacity:0.5} }).addTo(map);
 map.fitBounds(aoiLayer.getBounds(),{padding:[20,20]});
@@ -204,7 +211,6 @@ map.on('click', (e) => {
   div.querySelector(".save").addEventListener("click", (ev) => {
     ev.stopPropagation();
     const comment = div.querySelector("#comment").value.trim();
-
     marker.setPopupContent("<div><em>Tallennetaan...</em></div>");
 
     fetch(WEB_APP_URL, {
