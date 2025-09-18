@@ -15,7 +15,7 @@
       top: 10px;
       left: 10px;
       z-index: 1200;
-      max-width: 620px; /* leveämpi ohje */
+      max-width: 620px;
       background: rgba(255,255,255,0.97);
       border: 1px solid #e7e7e7;
       border-radius: 12px;
@@ -98,6 +98,22 @@
       transition: opacity .3s ease;
     }
     .toast.show { opacity: 1; }
+
+    /* Logo vasempaan alakulmaan */
+    .logo {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1500;
+      background: rgba(255,255,255,0.9);
+      padding: 6px 10px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .logo img {
+      height: 34px;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -117,6 +133,11 @@
     <button class="btn primary" id="finishBtn">Tallenna vastaukset</button>
   </div>
 </div>
+
+<!-- Logo linkkinä -->
+<a class="logo" href="https://linea.fi/" target="_blank" rel="noopener">
+  <img src="https://linea.fi/wordpress/wp-content/uploads/linea_logo2.png" alt="Linea Konsultit Oy logo">
+</a>
 
 <div id="map"></div>
 <div id="toast" class="toast"></div>
