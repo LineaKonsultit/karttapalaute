@@ -3,17 +3,56 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Karttapalaute – Leaflet + Google Sheets</title>
+  <title>Karttapalaute – Linea Konsultit Oy</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100%; }
+
+    /* Kelluva ohje */
+    .floating {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 1200;
+      max-width: min(720px, 92vw);
+      background: rgba(255,255,255,0.96);
+      border: 1px solid #e7e7e7;
+      border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.10);
+      padding: 12px 14px;
+    }
+    .floating h2{
+      margin: 0 0 6px 0;
+      font: 700 16px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    .floating ol{
+      margin: 0 0 10px 20px;
+      padding: 0;
+      font: 500 14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    .floating li + li{ margin-top: 4px; }
+    .floating .hint{
+      margin-top: 4px;
+      font: 500 12px/1.25 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:#444;
+    }
+    .actions { display:flex; gap:8px; justify-content:flex-end; }
+    .btn {
+      padding:.48rem .8rem; border:1px solid #c9c9c9; border-radius:9px;
+      background:#f7f7f7; cursor:pointer; font:600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .btn.primary{ background:#2e7d32; color:#fff; border-color:#2e7d32; }
+    @media (max-width:700px){
+      .floating{ right:12px; left:12px; }
+    }
+
+    /* Popup + toast */
     .popup-form { min-width: 220px; }
     .popup-form textarea { width: 100%; min-height: 70px; }
     .row { display: flex; gap: .5rem; margin-top: .5rem; justify-content: flex-end; }
     button { padding: .4rem .7rem; border: 1px solid #ccc; border-radius: .4rem; background: #f5f5f5; cursor: pointer; }
     button.primary { background: #2e7d32; color: white; border-color: #2e7d32; }
-    /* Toast-ilmoitus */
     .toast {
       position: fixed;
       left: 50%;
@@ -24,7 +63,7 @@
       padding: .6rem 1rem;
       border-radius: .5rem;
       font-size: .95rem;
-      z-index: 9999;
+      z-index: 1199;
       opacity: 0;
       pointer-events: none;
       transition: opacity .3s ease;
@@ -34,6 +73,22 @@
 </head>
 <body>
 
+<!-- Kelluva ohje + “Tallenna vastaukset” -->
+<div class="floating" role="region" aria-label="Ohje">
+  <h2>Merkitse ongelmakohdat kartalle</h2>
+  <ol>
+    <li>Klikkaa karttaa kohtaan, jossa jalankulku tai pyöräily on mielestäsi ongelmallista
+      <div class="hint">(esim. huono näkyvyys, vaarallinen ylitys, kapea piennar, pysäkkitarve).</div>
+    </li>
+    <li>Kirjoita avautuvaan laatikkoon lyhyt kuvaus ja paina <strong>Tallenna</strong>.</li>
+    <li>Voit merkitä useita kohtia.</li>
+    <li>Kun olet valmis, paina <strong>Tallenna vastaukset</strong>.</li>
+  </ol>
+  <div class="actions">
+    <button class="btn primary" id="finishBtn">Tallenna vastaukset</button>
+  </div>
+</div>
+
 <div id="map"></div>
 <div id="toast" class="toast"></div>
 
@@ -42,7 +97,19 @@
 <script>
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxmIVh417UOeV8B_Ra46Dpi9OCFoSs45uelkHLnWYYAt2TT92GKNFRG36962gCNIUB1/exec";
 
-// --- Toast-ilmoitus ---
+/* Kiitossivu samassa tiedostossa */
+document.getElementById('finishBtn').addEventListener('click', () => {
+  document.open();
+  document.write(`<!doctype html><meta charset="utf-8"><title>Kiitos</title>
+  <style>
+    html,body{height:100%;margin:0;background:#fff}
+    body{display:grid;place-items:center;font:600 28px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111}
+  </style>
+  <div>Kiitos vastauksista!</div>`);
+  document.close();
+});
+
+// --- Toast ---
 function showToast(msg, ms=2000) {
   const el = document.getElementById("toast");
   el.textContent = msg;
@@ -50,18 +117,22 @@ function showToast(msg, ms=2000) {
   setTimeout(() => el.classList.remove("show"), ms);
 }
 
-// --- AOI-viiva ---
+// --- AOI-viiva TM35 (GeometryCollection) ---
 const AOI_GEOJSON_TM35 = {
-  "type":"FeatureCollection",
-  "features":[
-    {"type":"Feature","geometry":{"type":"LineString","coordinates":[
-      [448367.549,6716436.53],[448352.43,6716410.2895],[448330.6255,6716372.1105],
-      [448318.202,6716342.102],[448303.316,6716305.636],[448289.79,6716271.4695],
-      [448279.5015,6716250.2885],[448263.097,6716221.362],[448245.6805,6716192.923],
-      [448225.887,6716151.882],[448208.754,6716107.7845],[448187.418,6716056.09],
-      [448170.214,6716024.939],[448160.344,6716005.063],[448151.8525,6715967.7095],
-      [448150.5415,6715922.2755],[448148.014,6715892.133],[448145.051,6715876.27]
-    ]},"properties":{}}
+  "type":"GeometryCollection",
+  "geometries":[
+    {"type":"LineString","coordinates":[
+      [448367.54900000157,6716436.530000003],[448352.43049999984,6716410.289500004],
+      [448330.62550000096,6716372.110500003],[448318.20199999865,6716342.101999999],
+      [448303.3160000006,6716305.636000004],[448289.7899999998,6716271.469500002],
+      [448279.5015000011,6716250.2885],[448263.097000001,6716221.362000001],
+      [448245.68049999984,6716192.923],[448225.88700000016,6716151.882000001],
+      [448208.7540000007,6716107.784500004],[448187.4179999987,6716056.090000003],
+      [448170.2139999996,6716024.938999999],[448160.3439999995,6716005.062999999],
+      [448153.4404029126,6715984.28881197],[448151.85250000097,6715967.709499999],
+      [448150.5415000003,6715922.2754999995],[448148.01399999956,6715892.133000001],
+      [448145.0509999999,6715876.270000001]
+    ]}
   ]
 };
 
@@ -69,19 +140,44 @@ const AOI_GEOJSON_TM35 = {
 const map = L.map('map');
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-// --- Koordinaattimuunnos ---
+// --- Koordinaattimuunnos TM35 → WGS84 + offset ---
 proj4.defs("EPSG:3067","+proj=utm +zone=35 +ellps=GRS80 +units=m +no_defs");
-function reprojectTM35toWGS84(geojson){
-  function conv([x,y]){ const [lon,lat]=proj4("EPSG:3067","WGS84",[x,y]); return [lon,lat]; }
+const OFFSET_LON = -0.00005;
+const OFFSET_LAT =  0.0000;
+
+function reprojectTM35toWGS84(geometry){
+  function conv([x,y]){
+    let [lon,lat] = proj4("EPSG:3067","WGS84",[x,y]);
+    lon += OFFSET_LON;
+    lat += OFFSET_LAT;
+    return [lon,lat];
+  }
   function mapCoords(c){ return (typeof c[0]==='number') ? conv(c) : c.map(mapCoords); }
-  return {type:geojson.type,features:(geojson.features||[]).map(f=>({
-    type:"Feature",properties:f.properties||{},geometry:{type:f.geometry.type,coordinates:mapCoords(f.geometry.coordinates)}
-  }))};
+
+  if (geometry.type === "GeometryCollection") {
+    return {
+      type:"FeatureCollection",
+      features: geometry.geometries.map(g => ({
+        type:"Feature",
+        properties:{},
+        geometry:{ type:g.type, coordinates: mapCoords(g.coordinates) }
+      }))
+    };
+  } else {
+    return {
+      type:"FeatureCollection",
+      features:[{
+        type:"Feature",
+        properties:{},
+        geometry:{ type:geometry.type, coordinates: mapCoords(geometry.coordinates) }
+      }]
+    };
+  }
 }
 
 // --- Viiva ---
 const AOI_WGS84 = reprojectTM35toWGS84(AOI_GEOJSON_TM35);
-const aoiLayer = L.geoJSON(AOI_WGS84,{ style:{color:'#ff8c00',weight:8,opacity:0.5} }).addTo(map);
+const aoiLayer = L.geoJSON(AOI_WGS84,{ style:{color:'#ff8c00',weight:16,opacity:0.5} }).addTo(map);
 map.fitBounds(aoiLayer.getBounds(),{padding:[20,20]});
 
 // --- Klikkaus kartalle ---
@@ -89,34 +185,28 @@ map.on('click', (e) => {
   const { lat, lng } = e.latlng;
   const marker = L.marker([lat, lng]).addTo(map);
 
-  // Popup DOM-elementtinä
   const div = document.createElement('div');
   div.className = "popup-form";
   div.innerHTML = `
-    <label><strong>Kuvaile lyhyesti:</strong></label><br/>
-    <textarea id="comment"></textarea>
+    <label><strong>Kuvaile ongelmaa:</strong></label><br/>
+    <textarea id="comment" placeholder="Lyhyt kuvaus..."></textarea>
     <div class="row">
       <button type="button" class="cancel">Peruuta</button>
       <button type="button" class="save primary">Tallenna</button>
     </div>
   `;
 
-  // Peruuta
   div.querySelector(".cancel").addEventListener("click", (ev) => {
-    ev.stopPropagation(); // estää karttaklikkauksen
+    ev.stopPropagation();
     map.removeLayer(marker);
   });
 
-  // Tallenna
   div.querySelector(".save").addEventListener("click", (ev) => {
-    ev.stopPropagation(); // estää karttaklikkauksen
-
+    ev.stopPropagation();
     const comment = div.querySelector("#comment").value.trim();
 
-    // Vaihdetaan popup heti -> palaute käyttäjälle
     marker.setPopupContent("<div><em>Tallennetaan...</em></div>");
 
-    // Lähetetään data taustalle (ei odotusta)
     fetch(WEB_APP_URL, {
       method: "POST",
       mode: "no-cors",
@@ -124,7 +214,6 @@ map.on('click', (e) => {
       body: JSON.stringify({ lat, lng, comment })
     });
 
-    // Suljetaan popup heti
     marker.closePopup();
     showToast("Tallennettu onnistuneesti!");
   });
