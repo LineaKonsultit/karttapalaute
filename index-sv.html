@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kartrespons – Linea Konsultit Oy</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100%; }
+
+    .floating {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 1200;
+      max-width: 520px;
+      background: rgba(255,255,255,0.97);
+      border: 1px solid #e7e7e7;
+      border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.10);
+      padding: 12px 14px;
+    }
+    .floating h2 {
+      margin: 0 0 6px 0;
+      font: 700 clamp(14px, 3.5vw, 16px)/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    .floating ol {
+      margin: 0 0 10px 20px;
+      padding: 0;
+      font: 500 clamp(13px, 3.5vw, 15px)/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    .floating li + li { margin-top: 4px; }
+    .floating .hint {
+      margin-top: 4px;
+      font: 500 clamp(11px, 3vw, 13px)/1.25 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color: #444;
+    }
+    .actions { display: flex; justify-content: flex-end; }
+    .btn {
+      padding: .6rem 1rem;
+      border: 1px solid #c9c9c9;
+      border-radius: 9px;
+      background: #f7f7f7;
+      cursor: pointer;
+      font: 600 clamp(13px, 3.5vw, 15px)/1 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    .btn.primary {
+      background: #2e7d32;
+      color: #fff;
+      border-color: #2e7d32;
+    }
+    @media (max-width: 600px) {
+      .floating { left: 10px; right: 10px; max-width: none; }
+      .actions { justify-content: center; }
+      .btn.primary { flex: 1; text-align: center; }
+    }
+
+    .popup-form { min-width: 220px; }
+    .popup-form textarea { width: 100%; min-height: 70px; }
+    .row { display: flex; gap: .5rem; margin-top: .5rem; justify-content: flex-end; }
+    button { padding: .4rem .7rem; border: 1px solid #ccc; border-radius: .4rem; background: #f5f5f5; cursor: pointer; }
+    button.primary { background: #2e7d32; color: white; border-color: #2e7d32; }
+
+    .leaflet-popup-pane,
+    .leaflet-popup,
+    .leaflet-popup-content-wrapper,
+    .leaflet-popup-content {
+      z-index: 4000 !important;
+      position: relative;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      padding: .6rem 1rem;
+      border-radius: .5rem;
+      font-size: .95rem;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s ease;
+    }
+    .toast.show { opacity: 1; }
+
+    .logo {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1500;
+      background: rgba(255,255,255,0.9);
+      padding: 6px 10px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .logo img { height: 34px; display: block; }
+  </style>
+</head>
+<body>
+
+<div class="floating" role="region" aria-label="Instruktion">
+  <h2>Markera problemställen på kartan</h2>
+  <ol>
+    <li>Klicka på kartan där gång- och cykeltrafiken upplevs som problematisk
+      <div class="hint">(t.ex. dålig sikt, farlig korsning, smal vägren, behov av hållplats).</div>
+    </li>
+    <li>Skriv en kort beskrivning i rutan som öppnas och tryck <strong>Spara</strong>.</li>
+    <li>Du kan markera flera ställen.</li>
+    <li>När du är klar, tryck <strong>Skicka in svaren</strong>.</li>
+  </ol>
+  <div class="actions">
+    <button class="btn primary" id="finishBtn">Skicka in svaren</button>
+  </div>
+</div>
+
+<a class="logo" href="https://linea.fi/" target="_blank" rel="noopener">
+  <img src="https://linea.fi/wordpress/wp-content/uploads/linea_logo2.png" alt="Linea Konsultit Oy logo">
+</a>
+
+<div id="map"></div>
+<div id="toast" class="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/proj4@2.9.2/dist/proj4.js"></script>
+<script>
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxmIVh417UOeV8B_Ra46Dpi9OCFoSs45uelkHLnWYYAt2TT92GKNFRG36962gCNIUB1/exec";
+
+document.getElementById('finishBtn').addEventListener('click', () => {
+  document.open();
+  document.write(`<!doctype html><meta charset="utf-8"><title>Tack</title>
+  <style>
+    html,body{height:100%;margin:0;background:#fff}
+    body{display:grid;place-items:center;font:600 26px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;text-align:center;padding:20px}
+  </style>
+  <div>Tack för dina svar!</div>`);
+  document.close();
+});
+
+function showToast(msg, ms=2000) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), ms);
+}
+
+const AOI_GEOJSON_TM35 = {
+  "type":"GeometryCollection",
+  "geometries":[
+    {"type":"LineString","coordinates":[
+      [448367.54900000157,6716436.530000003],[448352.43049999984,6716410.289500004],
+      [448330.62550000096,6716372.110500003],[448318.20199999865,6716342.101999999],
+      [448303.3160000006,6716305.636000004],[448289.7899999998,6716271.469500002],
+      [448279.5015000011,6716250.2885],[448263.097000001,6716221.362000001],
+      [448245.68049999984,6716192.923],[448225.88700000016,6716151.882000001],
+      [448208.7540000007,6716107.784500004],[448187.4179999987,6716056.090000003],
+      [448170.2139999996,6716024.938999999],[448160.3439999995,6716005.062999999],
+      [448153.4404029126,6715984.28881197],[448151.85250000097,6715967.709499999],
+      [448150.5415000003,6715922.2754999995],[448148.01399999956,6715892.133000001],
+      [448145.0509999999,6715876.270000001]
+    ]}
+  ]
+};
+
+const map = L.map('map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+proj4.defs("EPSG:3067","+proj=utm +zone=35 +ellps=GRS80 +units=m +no_defs");
+const OFFSET_LON = -0.00005;
+const OFFSET_LAT =  0.0000;
+
+function reprojectTM35toWGS84(geometry){
+  function conv([x,y]){
+    let [lon,lat] = proj4("EPSG:3067","WGS84",[x,y]);
+    lon += OFFSET_LON;
+    lat += OFFSET_LAT;
+    return [lon,lat];
+  }
+  function mapCoords(c){ return (typeof c[0]==='number') ? conv(c) : c.map(mapCoords); }
+  if (geometry.type === "GeometryCollection") {
+    return {
+      type:"FeatureCollection",
+      features: geometry.geometries.map(g => ({
+        type:"Feature",
+        properties:{},
+        geometry:{ type:g.type, coordinates: mapCoords(g.coordinates) }
+      }))
+    };
+  }
+}
+
+const AOI_WGS84 = reprojectTM35toWGS84(AOI_GEOJSON_TM35);
+const aoiLayer = L.geoJSON(AOI_WGS84,{ style:{color:'#ff8c00',weight:16,opacity:0.5} }).addTo(map);
+map.fitBounds(aoiLayer.getBounds(),{padding:[20,20]});
+
+map.on('click', (e) => {
+  const { lat, lng } = e.latlng;
+  const marker = L.marker([lat, lng]).addTo(map);
+
+  const div = document.createElement('div');
+  div.className = "popup-form";
+  div.innerHTML = `
+    <label><strong>Beskriv problemet:</strong></label><br/>
+    <textarea id="comment" placeholder="Kort beskrivning..."></textarea>
+    <div class="row">
+      <button type="button" class="cancel">Avbryt</button>
+      <button type="button" class="save primary">Spara</button>
+    </div>
+  `;
+
+  div.querySelector(".cancel").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    map.removeLayer(marker);
+  });
+
+  div.querySelector(".save").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const comment = div.querySelector("#comment").value.trim();
+    marker.setPopupContent("<div><em>Sparar...</em></div>");
+
+    fetch(WEB_APP_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lat, lng, comment })
+    });
+
+    marker.closePopup();
+    showToast("Svar sparat!");
+  });
+
+  marker.bindPopup(div).openPopup();
+});
+</script>
+</body>
+</html>
